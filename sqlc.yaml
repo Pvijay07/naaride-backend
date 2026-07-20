@@ -1,0 +1,12 @@
+version: "2"
+sql:
+  - schema: "migrations/000001_init.up.sql"
+    queries: "queries/"
+    gen:
+      go:
+        package: "db"
+        out: "internal/repository/db"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"

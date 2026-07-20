@@ -1,0 +1,1184 @@
+openapi: 3.0.3
+info:
+  title: Naaride Backend API
+  description: Complete OpenAPI specification for Naaride ride-sharing platform backend services, including Authentication, Rides management, Riders, Captains, Admin dashboards, and Payment webhooks.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local NestJS Development Server
+paths:
+  /api/v1/auth/otp/send:
+    post:
+      summary: Send OTP
+      description: Generates and sends a 6-digit OTP to the provided phone number. Includes rate limiting (3 requests per 10 minutes).
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendOtpDto'
+      responses:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: OTP sent successfully
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/otp/verify:
+    post:
+      summary: Verify OTP
+      description: Verifies the 6-digit OTP and generates a JWT access token and refresh token pair. Also upserts the user profile.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpDto'
+      responses:
+        '200':
+          description: Verification successful, returns token pair
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh Access Token
+      description: Issues a new access token and refresh token pair using a valid refresh token.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshDto'
+      responses:
+        '200':
+          description: Token pair refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/auth/login:
+    post:
+      summary: Admin Portal Login
+      description: Authenticates admin users using email and password, returning a JWT token pair.
+      tags:
+        - Authentication
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginDto'
+      responses:
+        '200':
+          description: Admin login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/rider/profile:
+    get:
+      summary: Get Rider Profile
+      description: Returns the profile data of the currently logged-in rider.
+      tags:
+        - Rider
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RiderProfile'
+        '401':
+          description: Unauthorized
+    put:
+      summary: Update Rider Profile
+      description: Updates editable profile fields for the logged-in rider.
+      tags:
+        - Rider
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileDto'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RiderProfile'
+        '401':
+          description: Unauthorized
+
+  /api/v1/captain/earnings:
+    get:
+      summary: Get Captain Earnings
+      description: Returns the total earnings, pending payouts, and recent earnings statistics of the logged-in captain.
+      tags:
+        - Captain
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Earnings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      total_earnings:
+                        type: number
+                        example: 4500.50
+                      pending_payouts:
+                        type: number
+                        example: 1200.00
+                      completed_rides_count:
+                        type: integer
+                        example: 24
+
+  /api/v1/captain/payout/request:
+    post:
+      summary: Request Payout
+      description: Requests a payout from the captain's available balance.
+      tags:
+        - Captain
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestPayoutDto'
+      responses:
+        '200':
+          description: Payout request submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      payout_id:
+                        type: string
+                        format: uuid
+                        example: "a809f0fd-767d-41a4-b91c-7cb0dcd7e6cc"
+                      status:
+                        type: string
+                        example: "pending"
+                      amount:
+                        type: number
+                        example: 500
+
+  /api/v1/rides/estimate:
+    post:
+      summary: Estimate Ride Fare
+      description: Calculates distance, duration, and estimated fare between pickup and drop-off coordinates, including surge multiplier calculations.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EstimateFareDto'
+      responses:
+        '200':
+          description: Estimate calculated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      distance_km:
+                        type: number
+                        example: 5.85
+                      duration_min:
+                        type: number
+                        example: 14
+                      estimated_fare:
+                        type: number
+                        example: 125.50
+                      surge_multiplier:
+                        type: number
+                        example: 1.2
+
+  /api/v1/rides/request:
+    post:
+      summary: Request a Ride
+      description: Places a new ride request on the matching system, broadcasting it to nearby captains.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestRideDto'
+      responses:
+        '201':
+          description: Ride request created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RideDetails'
+
+  /api/v1/rides/history:
+    get:
+      summary: Get Ride History
+      description: Retrieves the list of past and ongoing rides for the authenticated user (Rider or Captain).
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Ride history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RideDetails'
+
+  /api/v1/rides/{id}:
+    get:
+      summary: Get Ride Details
+      description: Retrieves details of a specific ride by its ID.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the ride
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ride details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RideDetails'
+
+  /api/v1/rides/{id}/cancel:
+    post:
+      summary: Cancel a Ride
+      description: Cancels an active or requested ride. A cancellation fee might apply.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the ride to cancel
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ride cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        example: cancelled
+                      cancellation_fee:
+                        type: number
+                        example: 20.00
+
+  /api/v1/rides/{id}/rate:
+    post:
+      summary: Rate a Ride
+      description: Submits rating score and optional text comment for a completed ride.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the ride
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateRideDto'
+      responses:
+        '200':
+          description: Ride rated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      ride_id:
+                        type: string
+                        format: uuid
+                      score:
+                        type: integer
+                        example: 5
+                      comment:
+                        type: string
+                        example: Great ride!
+
+  /api/v1/rides/{id}/accept:
+    post:
+      summary: Accept a Ride Request
+      description: Action for Captain to accept a pending ride request.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the ride to accept
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ride accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RideDetails'
+
+  /api/v1/rides/{id}/arrived:
+    post:
+      summary: Arrive at Pickup Location
+      description: Action for Captain to notify that they have arrived at the rider's pickup location.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the ride
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Arrival state updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RideDetails'
+
+  /api/v1/rides/{id}/start:
+    post:
+      summary: Start the Ride
+      description: Action for Captain to start the ride by verifying the OTP code provided by the rider.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the ride
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - otp
+              properties:
+                otp:
+                  type: string
+                  example: "482910"
+      responses:
+        '200':
+          description: Ride started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RideDetails'
+
+  /api/v1/rides/{id}/complete:
+    post:
+      summary: Complete the Ride
+      description: Action for Captain to complete the ride upon arriving at the destination. Triggers payment processing.
+      tags:
+        - Rides
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the ride
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ride completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RideDetails'
+
+  /api/v1/admin/dashboard/metrics:
+    get:
+      summary: Get Admin Dashboard Metrics
+      description: Returns operational platform metrics like daily active riders/captains, total rides, and revenue.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      active_riders:
+                        type: integer
+                        example: 104
+                      active_captains:
+                        type: integer
+                        example: 45
+                      total_rides_today:
+                        type: integer
+                        example: 320
+                      total_revenue_today:
+                        type: number
+                        example: 45200.00
+
+  /api/v1/admin/captains/{id}/kyc:
+    put:
+      summary: Review Captain KYC Status
+      description: Updates the KYC status of a captain (approved/rejected) with an optional reason.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID/ID of the captain
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateKycDto'
+      responses:
+        '200':
+          description: Captain KYC status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      kyc_status:
+                        type: string
+                        example: approved
+                      kyc_reject_reason:
+                        type: string
+                        nullable: true
+                        example: null
+
+  /api/v1/admin/pricing-rules/{id}:
+    put:
+      summary: Update Pricing Rules
+      description: Updates a specific fare pricing rule profile.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the pricing rule
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePricingDto'
+      responses:
+        '200':
+          description: Pricing rule updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      base_fare:
+                        type: number
+                        example: 45.00
+                      per_km_rate:
+                        type: number
+                        example: 16.50
+                      per_min_rate:
+                        type: number
+                        example: 2.50
+
+  /api/v1/admin/promo-codes:
+    post:
+      summary: Create Promo Code
+      description: Registers a new promotional coupon/discount code.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePromoDto'
+      responses:
+        '201':
+          description: Promo code created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      code:
+                        type: string
+                        example: NEWYEAR2026
+                      active:
+                        type: boolean
+                        example: true
+
+  /api/v1/admin/promo-codes/{id}/toggle:
+    put:
+      summary: Toggle Promo Code Status
+      description: Enforces toggling activity status of a promo code on/off.
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the promo code to toggle
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TogglePromoDto'
+      responses:
+        '200':
+          description: Promo status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      active:
+                        type: boolean
+                        example: false
+
+  /api/v1/webhooks/razorpay:
+    post:
+      summary: Razorpay Webhook Endpoint
+      description: Consumes Razorpay payment events. Authenticates payloads with 'x-razorpay-signature' verification.
+      tags:
+        - Webhooks
+      parameters:
+        - name: x-razorpay-signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Signature provided by Razorpay to verify payload integrity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - event
+                - payload
+              properties:
+                event:
+                  type: string
+                  example: order.paid
+                payload:
+                  type: object
+                  example:
+                    payment:
+                      entity:
+                        id: pay_N3gO8n8sAdf82
+                        amount: 15000
+                        currency: INR
+                        status: captured
+      responses:
+        '200':
+          description: Webhook event parsed and processed successfully
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SendOtpDto:
+      type: object
+      required:
+        - phone
+        - role
+      properties:
+        phone:
+          type: string
+          example: "+919876543210"
+        role:
+          type: string
+          enum: [rider, captain]
+          example: rider
+
+    VerifyOtpDto:
+      type: object
+      required:
+        - phone
+        - role
+        - otp
+      properties:
+        phone:
+          type: string
+          example: "+919876543210"
+        role:
+          type: string
+          enum: [rider, captain]
+          example: rider
+        otp:
+          type: string
+          example: "123456"
+
+    RefreshDto:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    AdminLoginDto:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@naaride.com
+        password:
+          type: string
+          example: supersecretadminpass
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refresh_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: TOO_MANY_REQUESTS
+            message:
+              type: string
+              example: Rate limit exceeded. Try again after 10 minutes.
+
+    RiderProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "7c34efbd-09d2-43fa-a690-bdcd98711cf2"
+        phone:
+          type: string
+          example: "+919876543210"
+        name:
+          type: string
+          example: "Jane Doe"
+        email:
+          type: string
+          format: email
+          example: "jane.doe@example.com"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-07-20T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-07-20T12:30:00Z"
+
+    UpdateProfileDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Jane Doe Updated"
+        email:
+          type: string
+          format: email
+          example: "jane.updated@example.com"
+
+    RequestPayoutDto:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: number
+          minimum: 1
+          example: 500.00
+
+    LocationDto:
+      type: object
+      required:
+        - lat
+        - lng
+      properties:
+        lat:
+          type: number
+          example: 12.9716
+        lng:
+          type: number
+          example: 77.5946
+
+    EstimateFareDto:
+      type: object
+      required:
+        - city
+        - vehicle_type
+        - pickup
+        - drop
+      properties:
+        city:
+          type: string
+          example: "Bengaluru"
+        vehicle_type:
+          type: string
+          enum: [bike, auto, cab]
+          example: bike
+        pickup:
+          $ref: '#/components/schemas/LocationDto'
+        drop:
+          $ref: '#/components/schemas/LocationDto'
+
+    RequestRideDto:
+      type: object
+      required:
+        - vehicle_type
+        - pickup
+        - drop
+        - estimated_fare
+        - payment_mode
+      properties:
+        vehicle_type:
+          type: string
+          enum: [bike, auto, cab]
+          example: auto
+        pickup:
+          $ref: '#/components/schemas/LocationDto'
+        drop:
+          $ref: '#/components/schemas/LocationDto'
+        estimated_fare:
+          type: number
+          example: 145.00
+        payment_mode:
+          type: string
+          enum: [cash, online]
+          example: online
+
+    RateRideDto:
+      type: object
+      required:
+        - score
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+        comment:
+          type: string
+          example: "Smooth and fast driving!"
+
+    RideDetails:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "bc3d09a8-8e6d-495c-9db8-7ef86a41f6ac"
+        rider_id:
+          type: string
+          format: uuid
+          example: "7c34efbd-09d2-43fa-a690-bdcd98711cf2"
+        captain_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: "df9001ba-fd8e-49b0-9ce3-1dbcd986927d"
+        vehicle_type:
+          type: string
+          example: auto
+        pickup_lat:
+          type: number
+          example: 12.9716
+        pickup_lng:
+          type: number
+          example: 77.5946
+        drop_lat:
+          type: number
+          example: 12.9816
+        drop_lng:
+          type: number
+          example: 77.6046
+        status:
+          type: string
+          enum: [requested, accepted, arrived, picked_up, completed, cancelled]
+          example: requested
+        estimated_fare:
+          type: number
+          example: 145.00
+        actual_fare:
+          type: number
+          nullable: true
+          example: null
+        payment_mode:
+          type: string
+          example: online
+        payment_status:
+          type: string
+          example: pending
+        otp:
+          type: string
+          example: "392019"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-07-20T13:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-07-20T13:00:05Z"
+
+    UpdateKycDto:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [approved, rejected]
+          example: approved
+        reason:
+          type: string
+          example: "Invalid document verification photo"
+
+    UpdatePricingDto:
+      type: object
+      required:
+        - base_fare
+        - per_km_rate
+        - per_min_rate
+        - min_fare
+        - cancellation_fee
+      properties:
+        base_fare:
+          type: number
+          example: 40.00
+        per_km_rate:
+          type: number
+          example: 15.00
+        per_min_rate:
+          type: number
+          example: 2.00
+        min_fare:
+          type: number
+          example: 50.00
+        cancellation_fee:
+          type: number
+          example: 20.00
+
+    CreatePromoDto:
+      type: object
+      required:
+        - code
+        - discount_percentage
+        - max_discount
+      properties:
+        code:
+          type: string
+          example: NEWYEAR2026
+        discount_percentage:
+          type: number
+          example: 15
+        max_discount:
+          type: number
+          example: 75.00
+
+    TogglePromoDto:
+      type: object
+      required:
+        - active
+      properties:
+        active:
+          type: boolean
+          example: false
